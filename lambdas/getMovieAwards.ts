@@ -18,6 +18,11 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
       };
     }
 
+    // Extract query parameters
+    const minAwards = event.queryStringParameters?.min
+      ? parseInt(event.queryStringParameters.min)
+      : null;
+
     // Query the MovieAwards table
     const queryCommand = new QueryCommand({
       TableName: process.env.AWARDS_TABLE_NAME,
@@ -30,26 +35,53 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const commandOutput = await ddbDocClient.send(queryCommand);
 
-    // Check if any data was found
+    // Check if any data is present
     if (!commandOutput.Items || commandOutput.Items.length === 0) {
       return {
         statusCode: 404,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "No awards found for the specified movie and award body." }),
+        body: JSON.stringify({
+          message: "No awards found for the specified movie and award body.",
+        }),
       };
     }
 
+    // Apply minimum awards filter if provided
+    const awards = commandOutput.Items;
+    if (minAwards !== null) {
+      const filteredAwards = awards.filter(
+        (award: any) => award.numAwards > minAwards
+      );
+
+      if (filteredAwards.length === 0) {
+        return {
+          statusCode: 400,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "Request failed" }),
+        };
+      }
+
+      return {
+        statusCode: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ data: filteredAwards }),
+      };
+    }
+
+    // Return the full results if no filter is applied
     return {
       statusCode: 200,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ data: commandOutput.Items }),
+      body: JSON.stringify({ data: awards }),
     };
   } catch (error: any) {
     console.error("Error: ", error);
     return {
       statusCode: 500,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ error: "An error occurred while processing the request." }),
+      body: JSON.stringify({
+        error: "An error occurred while processing the request.",
+      }),
     };
   }
 };
