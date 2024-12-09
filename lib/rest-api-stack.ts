@@ -50,6 +50,22 @@ export class RestAPIStack extends cdk.Stack {
     });
 
     // Functions
+    const getAllMoviesFn = new lambdanode.NodejsFunction(
+      this,
+      "GetAllMoviesFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        entry: `${__dirname}/../lambdas/getAllMovies.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: moviesTable.tableName,
+          REGION: "eu-west-1",
+        },
+      }
+    );
+
     const getMovieByIdFn = new lambdanode.NodejsFunction(
       this,
       "GetMovieByIdFn",
@@ -78,6 +94,23 @@ export class RestAPIStack extends cdk.Stack {
         memorySize: 128,
         environment: {
           TABLE_NAME: movieCastsTable.tableName,
+          REGION: "eu-west-1",
+        },
+      }
+    );
+
+    const getMovieAwardsFn = new lambdanode.NodejsFunction(
+      this,
+      "GetMovieAwardsFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        entry: `${__dirname}/../lambdas/getMovieAwards.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          MOVIES_TABLE_NAME: moviesTable.tableName,
+          AWARDS_TABLE_NAME: movieAwardsTable.tableName,
           REGION: "eu-west-1",
         },
       }
@@ -142,6 +175,11 @@ export class RestAPIStack extends cdk.Stack {
 
     const movieEndpoint = moviesEndpoint.addResource("{movieId}");
 
+    moviesEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getAllMoviesFn, { proxy: true })
+    );
+
     movieEndpoint.addMethod(
       "GET",
       new apig.LambdaIntegration(getMovieByIdFn, { proxy: true })
@@ -153,15 +191,23 @@ export class RestAPIStack extends cdk.Stack {
       new apig.LambdaIntegration(getMovieCastMembersFn, { proxy: true })
     );
 
+    const movieAwardEndpoint = movieEndpoint.addResource("award");
+    movieAwardEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getMovieAwardsFn, { proxy: true })
+    );
+
     movieEndpoint.addMethod(
       "DELETE",
       new apig.LambdaIntegration(deleteMovieByIdFn, { proxy: true })
     );
 
     // Permissions;
+    moviesTable.grantReadData(getAllMoviesFn);
     moviesTable.grantReadData(getMovieByIdFn);
     moviesTable.grantReadWriteData(deleteMovieByIdFn);
     movieCastsTable.grantReadData(getMovieCastMembersFn);
     movieCastsTable.grantReadData(getMovieByIdFn);
+    movieAwardsTable.grantReadData(getMovieAwardsFn);
   }
 }
